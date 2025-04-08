@@ -18,44 +18,12 @@
 # output
 # json file of strat for each hand in range for each node
 
-# algorithm
-#
-# Node
-# variables: player to act, player weighted range at this node, node id, previous action sequence (string that defines node),
-#            available actions, pot_size, OOP_stack_size, IP_stack_size
-#
-# Tree
-# 
-# Range - a dictionary of hands to weightings
-#
-# uses CFR iterations through the tree to augment strategies. After each iteration (or say 10 iterations), displays the exploitability and
-# gives user the option to pause or stop the solver
-
-# CFR algo
-# initialise strategies for every node to be an equal percentage of every available action
-# initialise regrets to be zero for each action for each hand at a node
-# for each iteration:
-#  - go through nodes starting at #0 -> #max,
-#  - for each hand in range with weight > 0, calculate its EV with the current strategy and
-
-# to calculate exploitability, for each player work out (pot - EV_of_max_eploitative_strat_of_villain) to find ur EV if they max exploit
-# , then subtract this from current EV of strat (EVs are weighted sums of EVs of combos in range at the root node) and work out as a % of pot
-
-
-#will need to traverse through the nodes, updating the actual ranges (weighting of combos, based on how often they took the action to get there
-# last), after an initial strategy is set and after each iteration of the solver
-
-# JSON File Structure
-# Nodes -> ID, act_seq, range -> for each hand weighting, action_freqs
-
 
 ID = -1
 
 from treys import Card, Evaluator
 from collections import deque
 import json
-
-import matplotlib.pyplot as plt
 
 
 def evalHS(evaluator, hand, board):
@@ -213,7 +181,6 @@ class Tree(object):
                 
                 new_node = Node(1 - current_node.to_act, next_range, current_node.action_seq.copy()+[action], current_node, new_ps, new_OOP_stack, new_IP_stack)
                 current_node.child_nodes[action] = new_node
-                #print(current_node)
                 
                 self.nodes.append(new_node)
                 queue.append(new_node)  # Continue expansion
@@ -232,7 +199,6 @@ class Tree(object):
                         child = node.child_nodes[action]
                         for node_to_update in child.child_nodes.values():
                             hand_to_update = node_to_update.player_range.getHand(handName)
-                            #print(node.action_seq,'\t',node_to_update.action_seq)
                             hand_to_update.reach_probability = hand.reach_probability * hand.actions_taken[node.availActs.index(action)]
             
 
@@ -247,7 +213,6 @@ class Tree(object):
         # then if every 5th iter, calc exploitability (EV OOP MAX-EXPL-STRAT + EV IP MAX-EXPL-STRAT) - TODO
         # then save into json file
         #
-        avg_strats = []
 
         for i in range(max_iter):
             
@@ -267,18 +232,15 @@ class Tree(object):
             # now update the strategies to the next calculated one
             for node in self.nodes:
                 for hand in node.player_range.hands_list:
-                    if node.ID ==2:
-                        avg_strats.append(hand.avg_strat[1])
                     hand.actions_taken = hand.next_strat
 
             self.update_reach_probs()
+
+            # to add: every 5 iterations calc exploitability and if < target exploitability stop the solver
         
-        plt.scatter(list(range(len(avg_strats))), avg_strats)
-        plt.show()
 
         nodes = []
         for node in self.nodes:
-            #print(node,'\n\n')
             rg_strat = {}
             rg_EVs = {}
             for hand in node.player_range.hands_list:
@@ -288,9 +250,6 @@ class Tree(object):
         
         with open(json_filename, 'w') as json_file:
             json.dump(nodes, json_file, indent=4)
-
-        global debug_nodes
-        debug_nodes = self.nodes
 
         
 
@@ -397,9 +356,6 @@ action_seq:\t{self.action_seq}\nendNode\t{self.endNode}\navailActs:\t{self.avail
 
             if self.to_act:
                 pot_size_if_r_called = (node.OOP_stack_size - self.OOP_stack_size) * 2 + node.pot_size
-                #print(self.OOP_stack_size, node.OOP_stack_size, pot_size_if_r_called)
-                #print(((node.OOP_stack_size - self.OOP_stack_size) + pot_size_if_r_called * float(raise_size)/100))
-                #print(node.IP_stack_size * AI_thresh/100,'\n\n')
                 if ((node.OOP_stack_size - self.OOP_stack_size) + pot_size_if_r_called * float(raise_size)/100) > node.IP_stack_size * AI_thresh/100:
                     if not 'RA' in self.availActs:
                         self.availActs.append('RA')
@@ -417,7 +373,6 @@ action_seq:\t{self.action_seq}\nendNode\t{self.endNode}\navailActs:\t{self.avail
     def calc_EV_hand_and_action(self, theHand, action, hero):
         '''calcs the EV of theHand from this node of taking this action'''
         EV = 0
-        # algorithm
         # takes action -> next node
         # EV = weighted sum of actions taken * EV for hero once get to node after action taken
         # along the way if put money in need to +/- this from EV
@@ -575,7 +530,6 @@ class Range(object):
 
     def get_range_action_freqs(self):
         '''Returns the list of action freqs of the entire range'''
-        # todo confirm below code works correctly
         num_acts = len(self.hands_list[0].actions_taken)
         frqs = [0] * num_acts
         total_weight = 0
