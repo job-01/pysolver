@@ -24,6 +24,7 @@ ID = -1
 from treys import Card, Evaluator
 from collections import deque
 import json
+import matplotlib.pyplot as plt
 
 
 def evalHS(evaluator, hand, board):
@@ -85,8 +86,6 @@ def hand_v_range_equity(hand, theRange):
         
 
 def update_strat_on_iteration(action_freqs, action_EVs, cummulative_regrets, RP):
-    if RP <0:
-        print('BUG:\t',RP)
     '''parameters are given as lists, with the length being the number of available actions, and all lists in the same order.\nReturns new action_freqs, new cum_regrts'''
     expected_utility = sum(a * b for a, b in zip(action_freqs, action_EVs))
     regrets = [(x - expected_utility) * RP for x in action_EVs]
@@ -215,6 +214,8 @@ class Tree(object):
         # then if every 5th iter, calc exploitability (EV OOP MAX-EXPL-STRAT + EV IP MAX-EXPL-STRAT) - TODO
         # then save into json file
         #
+        x=list(range(max_iter))
+        y=[]
 
         for i in range(max_iter):
 
@@ -229,7 +230,9 @@ class Tree(object):
                         hand.next_strat = new_strat
                         hand.cumm_regrets = new_cumm_regs
                         hand.add_strat_to_avg_strat(new_strat, i+1)
-                        hand.regrets = regrets
+                        if hand.hand[0] == 'Q':
+                            #print(hand.actions_taken*100)
+                            y.append(hand.avg_strat[1]*100)
 
             # now update the strategies to the next calculated one
             for node in self.nodes:
@@ -239,22 +242,21 @@ class Tree(object):
             self.update_reach_probs()
 
             # to add: every 5 iterations calc exploitability and if < target exploitability stop the solver
-
+        
+        #plt.scatter(x,y)
+        #plt.show()
         nodes = []
         for node in self.nodes:
             rg_strat = {}
             rg_EVs = {}
-            regs = {}
             rg_act_EVs = {}
+            RPs = {}
             for hand in node.player_range.hands_list:
                 rg_strat[hand.hand] = hand.actions_taken
-                try:
-                    regs[hand.hand] = hand.regrets
-                except:
-                    regs[hand.hand] = None
                 rg_act_EVs[hand.hand] = node.calc_EV_hand_all_acts(hand, node.to_act)
                 rg_EVs[hand.hand] = node.calc_EV_hand(hand, node.to_act)
-            nodes.append({'id':node.ID, 'atn-sq':node.action_seq, 'avl-acs':node.availActs, 'rg-strat':rg_strat, 'regrs': regs, 'rg-act-EVs':rg_act_EVs, 'rg-EVs':rg_EVs})
+                RPs[hand.hand] = hand.reach_probability
+            nodes.append({'id':node.ID, 'atn-sq':node.action_seq, 'avl-acs':node.availActs, 'rg-strat':rg_strat, 'rg-act-EVs':rg_act_EVs, 'RPs':RPs, 'rg-EVs':rg_EVs})
         
         with open('debug.json', 'w') as json_file:
             json.dump(nodes, json_file, indent=4)
