@@ -1,19 +1,19 @@
 # V1 only for river street, rake free
 # player 0 = OOP, 1 = IP
 
-# inputs (given in a textfile with each on a new line
+# inputs (given in a textfile with each on a new line)
 # 1 - pot size
 # 2 - stack size
-# 3 - OOP range
+# 3 - OOP range   (eg AsAc, Ac2d:0.2,...)
 # 4 - IP range
-# 5 - board
-# 6 - OOP bet size options
+# 5 - board    (eg JhJs8s5h2d)
+# 6 - OOP bet size options (comma separated values as a pct pot or a for all-in)
 # 7 - IP bet size options
 # 8 - OOP raise size options
 # 9 - IP raise size options
 # 10 - force All-In threshold (when a bet is greater than this % of the remaining stack that bet is replaced with all-in)
 # 11 - max num iterations
-# 12 - target exploitability
+# 12 - target exploitability (in pct of the pot)
 
 # output
 # json file of strat for each hand in range for each node
@@ -85,6 +85,8 @@ def hand_v_range_equity(hand, theRange):
         
 
 def update_strat_on_iteration(action_freqs, action_EVs, cummulative_regrets, RP):
+    if RP <0:
+        print('BUG:\t',RP)
     '''parameters are given as lists, with the length being the number of available actions, and all lists in the same order.\nReturns new action_freqs, new cum_regrts'''
     expected_utility = sum(a * b for a, b in zip(action_freqs, action_EVs))
     regrets = [(x - expected_utility) * RP for x in action_EVs]
@@ -215,7 +217,6 @@ class Tree(object):
         #
 
         for i in range(max_iter):
-            
 
             # calc EVs for every hand in every node
             for node in self.nodes:
@@ -228,6 +229,7 @@ class Tree(object):
                         hand.next_strat = new_strat
                         hand.cumm_regrets = new_cumm_regs
                         hand.add_strat_to_avg_strat(new_strat, i+1)
+                        hand.regrets = regrets
 
             # now update the strategies to the next calculated one
             for node in self.nodes:
@@ -237,6 +239,25 @@ class Tree(object):
             self.update_reach_probs()
 
             # to add: every 5 iterations calc exploitability and if < target exploitability stop the solver
+
+        nodes = []
+        for node in self.nodes:
+            rg_strat = {}
+            rg_EVs = {}
+            regs = {}
+            rg_act_EVs = {}
+            for hand in node.player_range.hands_list:
+                rg_strat[hand.hand] = hand.actions_taken
+                try:
+                    regs[hand.hand] = hand.regrets
+                except:
+                    regs[hand.hand] = None
+                rg_act_EVs[hand.hand] = node.calc_EV_hand_all_acts(hand, node.to_act)
+                rg_EVs[hand.hand] = node.calc_EV_hand(hand, node.to_act)
+            nodes.append({'id':node.ID, 'atn-sq':node.action_seq, 'avl-acs':node.availActs, 'rg-strat':rg_strat, 'regrs': regs, 'rg-act-EVs':rg_act_EVs, 'rg-EVs':rg_EVs})
+        
+        with open('debug.json', 'w') as json_file:
+            json.dump(nodes, json_file, indent=4)
         
 
         nodes = []
@@ -390,6 +411,10 @@ action_seq:\t{self.action_seq}\nendNode\t{self.endNode}\navailActs:\t{self.avail
                 else:
                     vilsRange = self.player_range # ensure RPs have been updated after any strat (actions_taken) change, before running this
                 EV += hand_v_range_equity(theHand, vilsRange) * self.pot_size
+
+            elif self.action_seq[-1] == 'F':
+                if self.to_act == hero: # villain just folded
+                    EV += self.pot_size
                 
         else:
 
