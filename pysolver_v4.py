@@ -545,10 +545,10 @@ class Range(object):
         
 
 
-def main():
+def main(inputs_file_name, outputs_file_name):
     global OOP_b_szs, IP_b_szs, OOP_r_szs, IP_r_szs, AI_thresh, evaluator, board
     evaluator = Evaluator()
-    potsz, stacksz, OOP_range, IP_range, board, OOP_b_szs, IP_b_szs, OOP_r_szs, IP_r_szs, AI_thresh, max_iters, target_expl = get_inputs('solver_inputs2.txt')
+    potsz, stacksz, OOP_range, IP_range, board, OOP_b_szs, IP_b_szs, OOP_r_szs, IP_r_szs, AI_thresh, max_iters, target_expl = get_inputs(inputs_file_name)
     if OOP_b_szs==['']: OOP_b_szs=[]
     if IP_b_szs==['']: IP_b_szs=[]
     if OOP_r_szs==['']: OOP_r_szs=[]
@@ -557,8 +557,8 @@ def main():
     board = (board[:2], board[2:4], board[4:6], board[6:8], board[8:10])
     board = [Card.new(card) for card in board]
     tree.buildTree()
-    tree.do_cfr(max_iters, target_expl, 'solver_results2.json')
+    tree.do_cfr(max_iters, target_expl, outputs_file_name)
 
 
 if __name__ == "__main__":
-    main()
+    main('solver_inputs2.txt', 'solver_results2.json')
