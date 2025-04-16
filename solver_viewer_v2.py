@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import json
 import os
 import re
-import pysolver_v4
+import pysolver_v8
 
 class PokerSolverGUI:
     def __init__(self, root):
@@ -175,7 +175,7 @@ class PokerSolverGUI:
         
         # Run the solver
         try:
-            pysolver_v4.main(input_file, output_file)
+            pysolver_v8.main(input_file, output_file)
             messagebox.showinfo("Success", "Solver Finished")
             
             # Load the output file
