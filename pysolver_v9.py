@@ -1,4 +1,4 @@
-# V1 only for river street, rake free
+# only for river street, rake free
 # player 0 = OOP, 1 = IP
 
 # inputs (given in a textfile with each on a new line)
@@ -25,6 +25,7 @@ from treys import Card, Evaluator
 from collections import deque
 import json, time
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def evalHS(evaluator, hand, board):
@@ -35,7 +36,6 @@ def get_inputs(filename):
     with open(filename, 'r') as file:
         lines = [line.strip() for line in file]
 
-    # Normalize board lines (5 to 8) by replacing 'A' with 'a'
     for i in range(5, 9):
         lines[i] = lines[i].replace('A', 'a')
 
@@ -131,28 +131,24 @@ def hand_v_range_equity(hand, theRange):
 def update_strat_on_iteration(action_freqs, action_EVs, cummulative_regrets, countfReached): 
     '''Returns new action_freqs, new cumulative regrets'''
     
-    expected_utility = sum(f * ev for f, ev in zip(action_freqs, action_EVs))
+    # Calculate expected utility using vectorized operation
+    expected_utility = np.sum(action_freqs * action_EVs)
     
-    new_cumm_regs = []
-    pos_regrets = []
-    sum_of_pos_regrets = 0.0
+    # Calculate regrets and update cumulative regrets
+    regrets = action_EVs - expected_utility
+    new_cumm_regs = cummulative_regrets + regrets * countfReached
     
-    for ev, reg in zip(action_EVs, cummulative_regrets):
-        regret = ev - expected_utility
-        updated_regret = reg + regret * countfReached
-        new_cumm_regs.append(updated_regret)
-        
-        pos_regret = max(updated_regret, 0)
-        pos_regrets.append(pos_regret)
-        sum_of_pos_regrets += pos_regret
-
+    # Calculate positive regrets and their sum
+    pos_regrets = np.maximum(new_cumm_regs, 0)
+    sum_of_pos_regrets = np.sum(pos_regrets)
+    
+    # Compute new strategy
     n_actions = len(action_freqs)
-    
     if sum_of_pos_regrets <= 0:
-        new_strat = [1.0 / n_actions] * n_actions
+        new_strat = np.full(n_actions, 1.0 / n_actions)
     else:
-        new_strat = [r / sum_of_pos_regrets for r in pos_regrets]
-
+        new_strat = pos_regrets / sum_of_pos_regrets
+    
     return new_strat, new_cumm_regs
     
 
@@ -305,7 +301,7 @@ class Tree(object):
             # now update the strategies to the next calculated one
             for node in self.nodes:
                 for hand in node.player_range.hands_list:
-                    hand.actions_taken = hand.next_strat
+                    hand.actions_taken = hand.next_strat.copy()
 
             self.update_reach_probs()
             
@@ -315,7 +311,7 @@ class Tree(object):
         # set strat to avg_strat
         for node in self.nodes:
             for hand in node.player_range.hands_list:
-                hand.actions_taken = hand.avg_strat
+                hand.actions_taken = hand.avg_strat.copy()
         self.update_reach_probs()
 
         nodes = []
@@ -324,9 +320,9 @@ class Tree(object):
             rg_EVs = {}
             act_EVs = {}
             for hand in node.player_range.hands_list:
-                rg_strat[hand.hand] = hand.avg_strat
+                rg_strat[hand.hand] = list(hand.avg_strat)
                 rg_EVs[hand.hand] = node.calc_EV_hand(hand, node.to_act)
-                act_EVs[hand.hand] = node.calc_EV_hand_all_acts(hand, node.to_act)
+                act_EVs[hand.hand] = list(node.calc_EV_hand_all_acts(hand, node.to_act))
             nodes.append({'id':node.ID, 'atn-sq':node.action_seq, 'avl-acs':node.availActs, 'rg-strat':rg_strat, 'act-EVs':act_EVs, 'rg-EVs':rg_EVs})
             
         
@@ -539,7 +535,7 @@ action_seq:\t{self.action_seq}\nendNode\t{self.endNode}\navailActs:\t{self.avail
             for act in self.availActs:
                 ls.append(self.calc_EV_hand_and_action(theHand, act, hero))
         
-        return ls
+        return np.array(ls)
 
     def calc_EV_range(self):
         '''calcs the EV of the players range from this node with its current strategy'''
@@ -564,21 +560,20 @@ action_seq:\t{self.action_seq}\nendNode\t{self.endNode}\navailActs:\t{self.avail
 
 class Hand(object):
     '''Represents a hand, lists of which are a range'''
-    def __init__(self, hand, weighting=1, actions_taken=[], cumm_regrets=[]):
+    def __init__(self, hand, weighting=1, actions_taken=np.array([]), cumm_regrets=np.array([])):
         '''hand parameter is eg AsKc, actions_taken is eg [0, 0.4, 0.6]'''
         self.hand = hand
         self.weighting = weighting
         self.actions_taken = actions_taken
         self.cumm_regrets = cumm_regrets
         self.reach_probability = 1
-        self.EVs = []
-        self.avg_strat = actions_taken
-        self.next_strat = []
+        self.EVs = np.array([])
+        self.avg_strat = actions_taken.copy()
+        self.next_strat = np.array([])
 
     def add_strat_to_avg_strat(self, thisStrat, iter_num):
         '''iter_num should be 1 for the first iteration'''
-        for i in range(len(self.avg_strat)):
-            self.avg_strat[i] = self.avg_strat[i] * (iter_num-1)/iter_num + thisStrat[i] * 1/iter_num
+        self.avg_strat = self.avg_strat * (iter_num-1)/iter_num + thisStrat * 1/iter_num
         
 
 class Range(object):
@@ -609,9 +604,9 @@ class Range(object):
         if not num_poss_acts:
             return
         for hand in self.hands_list:
-            hand.actions_taken = [round(1/num_poss_acts,3)] * num_poss_acts
-            hand.cumm_regrets = [0] * num_poss_acts
-            hand.avg_strat = [round(1/num_poss_acts,3)] * num_poss_acts
+            hand.actions_taken = np.full(num_poss_acts, round(1/num_poss_acts, 3))
+            hand.cumm_regrets = np.zeros(num_poss_acts, dtype=int)
+            hand.avg_strat = np.full(num_poss_acts, round(1/num_poss_acts, 3))
 
     def calc_EVs(self, node):
         for hand in self.hands_list:
